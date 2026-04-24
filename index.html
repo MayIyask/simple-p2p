@@ -1,31 +1,53 @@
 <!DOCTYPE html>
 <html>
 <body>
-  <h2>发消息到虚拟机</h2>
+  <h2>房间聊天室</h2>
 
-  <input id="msg" placeholder="输入消息">
-  <button onclick="send()">发送</button>
+  <input id="room" placeholder="输入房间号">
+  <button onclick="join()">加入/创建房间</button>
 
-  <h3>VM显示：</h3>
-  <div id="out"></div>
+  <div id="chat" style="display:none;">
+    <h3>当前房间：<span id="rname"></span></h3>
+
+    <input id="msg" placeholder="输入消息">
+    <button onclick="send()">发送</button>
+
+    <div id="out"></div>
+  </div>
 
 <script>
 const server = "http://100.88.34.8:3000";
 
-function send() {
-  fetch(server + "/send", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({message: document.getElementById("msg").value})
-  });
+let currentRoom = null;
+
+function join() {
+    currentRoom = document.getElementById("room").value;
+    document.getElementById("rname").innerText = currentRoom;
+    document.getElementById("chat").style.display = "block";
 }
 
-setInterval(async () => {
-  const res = await fetch(server + "/get");
-  const data = await res.json();
-  document.getElementById("out").innerText = data.message;
-}, 1000);
-</script>
+function send() {
+    fetch(server + "/send", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            room: currentRoom,
+            message: document.getElementById("msg").value
+        })
+    });
+}
 
+// 轮询刷新房间消息
+setInterval(async () => {
+    if (!currentRoom) return;
+
+    const res = await fetch(server + "/get?room=" + currentRoom);
+    const data = await res.json();
+
+    document.getElementById("out").innerHTML =
+        data.messages.map(m => `<div>${m.msg}</div>`).join("");
+}, 1000);
+
+</script>
 </body>
 </html>

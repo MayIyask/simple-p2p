@@ -2,16 +2,32 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>石头剪刀布 - 房间版</title>
+<title>石头剪刀布 - 联机版</title>
+
 <style>
-body { font-family: Arial; text-align: center; margin-top: 40px; }
-button { margin: 5px; padding: 10px 20px; }
-input { width: 200px; padding: 5px; }
+body {
+  font-family: Arial;
+  text-align: center;
+  margin-top: 40px;
+}
+
+button {
+  margin: 5px;
+  padding: 10px 20px;
+  font-size: 16px;
+}
+
+input {
+  width: 200px;
+  padding: 6px;
+  font-size: 14px;
+}
 </style>
 </head>
+
 <body>
 
-<h2>🎮 石头剪刀布（房间系统）</h2>
+<h2>🎮 石头剪刀布（Socket.IO + 房间版）</h2>
 
 <p>你的房间号：</p>
 <h3 id="myRoom">未创建</h3>
@@ -29,39 +45,67 @@ input { width: 200px; padding: 5px; }
 
 <hr>
 
-<button onclick="play('rock')">石头</button>
-<button onclick="play('scissors')">剪刀</button>
-<button onclick="play('paper')">布</button>
+<button onclick="play('rock')">✊ 石头</button>
+<button onclick="play('scissors')">✌ 剪刀</button>
+<button onclick="play('paper')">✋ 布</button>
 
 <h3 id="result"></h3>
 
+<!-- Socket.IO -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
+// ======================
+// 🔥 连接后端（改这里IP）
+// ======================
 const socket = io("http://100.88.34.8:3000");
 
 let room = null;
 let myMove = null;
 let opponentMove = null;
 
-// 创建房间
+// ======================
+// 🔍 调试：连接状态
+// ======================
+socket.on("connect", () => {
+  console.log("✅ connected to server");
+  document.getElementById("status").innerText = "已连接服务器";
+});
+
+socket.on("connect_error", (err) => {
+  console.log("❌ connect error:", err);
+  document.getElementById("status").innerText = "连接失败";
+});
+
+// ======================
+// 🎮 创建房间
+// ======================
 function createRoom() {
   room = Math.floor(Math.random() * 9000 + 1000).toString();
 
   document.getElementById("myRoom").innerText = room;
-  document.getElementById("status").innerText = "房间已创建，等待玩家加入...";
+  document.getElementById("status").innerText = "等待对手加入...";
 
   socket.emit("joinRoom", room);
 }
 
-// 加入房间
+// ======================
+// 🎮 加入房间
+// ======================
 function joinRoom() {
   room = document.getElementById("roomInput").value;
 
-  if (!room) return alert("请输入房间号");
+  if (!room) {
+    alert("请输入房间号");
+    return;
+  }
 
   socket.emit("joinRoom", room);
 }
+
+// ======================
+// 📡 后端事件
+// ======================
 
 // 成功加入
 socket.on("joined", r => {
@@ -79,16 +123,18 @@ socket.on("roomFull", () => {
   alert("房间已满（最多2人）");
 });
 
-// 接收对手动作
+// 对手动作
 socket.on("opponentMove", move => {
   opponentMove = move;
   checkResult();
 });
 
-// 出拳
+// ======================
+// 🎮 出拳
+// ======================
 function play(move) {
   if (!room) {
-    alert("请先创建或加入房间！");
+    alert("请先创建或加入房间");
     return;
   }
 
@@ -102,11 +148,13 @@ function play(move) {
   checkResult();
 }
 
-// 判断胜负
+// ======================
+// 🧠 判定胜负
+// ======================
 function checkResult() {
   if (!myMove || !opponentMove) return;
 
-  let result = "平局";
+  let result = "平局 🤝";
 
   if (
     (myMove === "rock" && opponentMove === "scissors") ||
@@ -119,7 +167,7 @@ function checkResult() {
   }
 
   document.getElementById("result").innerText =
-    `你:${myMove} 对手:${opponentMove} → ${result}`;
+    `你: ${myMove} | 对手: ${opponentMove} → ${result}`;
 
   myMove = null;
   opponentMove = null;

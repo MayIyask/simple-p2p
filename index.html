@@ -1,79 +1,28 @@
 <!DOCTYPE html>
 <html>
 <body>
-  <h2>房间聊天室</h2>
+    <h2>发送消息到虚拟机</h2>
+    <input type="text" id="msgInput" placeholder="输入内容...">
+    <button onclick="sendMessage()">发送</button>
 
-  <input id="room" placeholder="输入房间号">
-  <button onclick="join()">加入房间</button>
+    <script>
+        async function sendMessage() {
+            const msg = document.getElementById('msgInput').value;
+            // 注意：这里需要替换成你虚拟机的公网 IP
+            const serverIp = 'http://你的虚拟机公网IP:5000/send';
 
-  <p id="status"></p>
-
-  <div id="chat" style="display:none;">
-    <h3>当前房间：<span id="rname"></span></h3>
-
-    <input id="msg" placeholder="输入消息">
-    <button onclick="send()">发送</button>
-
-    <div id="out"></div>
-  </div>
-
-<script>
-const server = "https://mininet-vm.taildb667f.ts.net";
-
-
-let currentRoom = null;
-
-// 👉 加入房间（关键修复点）
-async function join() {
-    const room = document.getElementById("room").value;
-
-    const res = await fetch(server + "/join", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ room })
-    });
-
-    const data = await res.json();
-
-    currentRoom = room;
-    document.getElementById("rname").innerText = room;
-    document.getElementById("chat").style.display = "block";
-
-    if (data.created) {
-        document.getElementById("status").innerText = "🆕 房间已创建";
-    } else {
-        document.getElementById("status").innerText = "✅ 已加入房间";
-    }
-}
-
-// 👉 发送消息（只有 join 后才能发）
-function send() {
-    if (!currentRoom) {
-        alert("请先加入房间");
-        return;
-    }
-
-    fetch(server + "/send", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            room: currentRoom,
-            message: document.getElementById("msg").value
-        })
-    });
-}
-
-// 👉 刷新消息
-setInterval(async () => {
-    if (!currentRoom) return;
-
-    const res = await fetch(server + "/get?room=" + currentRoom);
-    const data = await res.json();
-
-    document.getElementById("out").innerHTML =
-        data.messages.map(m => `<div>${m.msg}</div>`).join("");
-}, 1000);
-
-</script>
+            try {
+                const response = await fetch(serverIp, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({msg: msg})
+                });
+                const resData = await response.json();
+                alert('服务器返回: ' + resData.status);
+            } catch (error) {
+                console.error('发送失败:', error);
+            }
+        }
+    </script>
 </body>
 </html>

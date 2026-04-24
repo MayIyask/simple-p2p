@@ -1,34 +1,62 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <meta charset="UTF-8">
+    <title>极简聊天室</title>
+    <style>
+        #chatBox { height: 300px; border: 1px solid #ccc; overflow-y: scroll; margin-bottom: 10px; padding: 10px; }
+        .msg-item { margin-bottom: 5px; border-bottom: 1px dashed #eee; }
+        .time { color: #888; font-size: 0.8em; }
+    </style>
+</head>
 <body>
-    <h2>发送消息到虚拟机</h2>
-    <input type="text" id="msgInput" placeholder="输入内容...">
+    <h2>公共聊天室</h2>
+    <div id="chatBox">正在加载消息...</div>
+    
+    <input type="text" id="msgInput" placeholder="输入消息">
     <button onclick="sendMessage()">发送</button>
 
     <script>
+        const baseUrl = 'https://mininet-vm.taildb667f.ts.net';
+
+        // 发送消息
         async function sendMessage() {
-            const msg = document.getElementById('msgInput').value;
+            const input = document.getElementById('msgInput');
+            if(!input.value) return;
             
-            // 关键点：使用 Tailscale 提供的 HTTPS 域名，后面加上你在 Flask 定义的路由 /send
-            const serverUrl = 'https://mininet-vm.taildb667f.ts.net/send';
-        
+            await fetch(`${baseUrl}/send`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({msg: input.value})
+            });
+            input.value = ''; // 清空输入框
+            loadMessages();   // 立即刷新一次
+        }
+
+        // 加载消息
+        async function loadMessages() {
             try {
-                const response = await fetch(serverUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ msg: msg })
-                });
+                const response = await fetch(`${baseUrl}/get`);
+                const msgs = await response.json();
+                const chatBox = document.getElementById('chatBox');
                 
-                const resData = await response.json();
-                console.log('成功:', resData);
-                alert('发送成功！服务器收到：' + resData.received);
-            } catch (error) {
-                console.error('发送失败:', error);
-                alert('发送失败，请检查控制台 Error');
+                chatBox.innerHTML = msgs.map(m => `
+                    <div class="msg-item">
+                        <span class="time">[${m.time}]</span> ${m.content}
+                    </div>
+                `).join('');
+                
+                // 滚动到底部
+                chatBox.scrollTop = chatBox.scrollHeight;
+            } catch (e) {
+                console.error("更新失败", e);
             }
         }
+
+        // 每 3 秒自动刷新一次
+        setInterval(loadMessages, 3000);
+        // 页面加载时执行一次
+        loadMessages();
     </script>
 </body>
 </html>

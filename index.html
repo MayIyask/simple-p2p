@@ -2,22 +2,23 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>P2P 石头剪刀布</title>
+<title>P2P 石头剪刀布（稳定版）</title>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <style>
 body { font-family: Arial; text-align: center; }
 button { margin: 5px; padding: 10px 20px; }
+input { width: 300px; }
 </style>
 </head>
 <body>
 
-<h2>🎮 P2P 石头剪刀布</h2>
+<h2>🎮 P2P 石头剪刀布（稳定版）</h2>
 
 <p>你的ID：</p>
-<input id="myid" readonly style="width:300px">
+<input id="myid" readonly>
 
-<p>连接对方：</p>
-<input id="target" placeholder="输入对方ID">
+<p>连接对方ID：</p>
+<input id="target">
 <button onclick="connectPeer()">连接</button>
 
 <h3 id="status">未连接</h3>
@@ -31,17 +32,33 @@ button { margin: 5px; padding: 10px 20px; }
 <h3 id="result"></h3>
 
 <script>
-let peer = new Peer();
+// 🌐 加 STUN + TURN（关键）
+let peer = new Peer({
+  config: {
+    iceServers: [
+      // STUN（尝试直连）
+      { urls: "stun:stun.l.google.com:19302" },
+
+      // TURN（失败兜底，中继）
+      {
+        urls: "turn:openrelay.metered.ca:80",
+        username: "openrelayproject",
+        credential: "openrelayproject"
+      }
+    ]
+  }
+});
+
 let conn;
 let myMove = null;
 let opponentMove = null;
 
-// 获取自己的ID
+// 获取ID
 peer.on('open', id => {
   document.getElementById('myid').value = id;
 });
 
-// 接收连接
+// 被动接收连接
 peer.on('connection', connection => {
   conn = connection;
   setupConn();
@@ -49,13 +66,15 @@ peer.on('connection', connection => {
 
 // 主动连接
 function connectPeer() {
-  let target = document.getElementById('target').value;
+  let target = document.getElementById('target').value.trim();
   conn = peer.connect(target);
   setupConn();
 }
 
-// 设置连接事件
+// 初始化连接
 function setupConn() {
+  document.getElementById('status').innerText = "连接中...";
+
   conn.on('open', () => {
     document.getElementById('status').innerText = "已连接 ✅";
   });
@@ -66,11 +85,15 @@ function setupConn() {
       checkResult();
     }
   });
+
+  conn.on('close', () => {
+    document.getElementById('status').innerText = "连接断开 ❌";
+  });
 }
 
 // 出拳
 function play(move) {
-  if (!conn || conn.open !== true) {
+  if (!conn || !conn.open) {
     alert("还没连接！");
     return;
   }
@@ -86,20 +109,20 @@ function checkResult() {
   if (!myMove || !opponentMove) return;
 
   let res = "平局";
+
   if (
     (myMove === "rock" && opponentMove === "scissors") ||
     (myMove === "scissors" && opponentMove === "paper") ||
     (myMove === "paper" && opponentMove === "rock")
-  ) res = "你赢了 🎉";
-
-  if (myMove !== opponentMove && res !== "你赢了 🎉") {
+  ) {
+    res = "你赢了 🎉";
+  } else if (myMove !== opponentMove) {
     res = "你输了 😢";
   }
 
   document.getElementById('result').innerText =
     `你:${myMove} | 对手:${opponentMove} → ${res}`;
 
-  // 重置
   myMove = null;
   opponentMove = null;
 }

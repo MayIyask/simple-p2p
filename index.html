@@ -26,8 +26,10 @@ let socket;
 
 // 1️⃣ 只做连接
 socket = io("https://mininet-vm.taildb667f.ts.net", {
-  transports: ["polling"]
+  transports: ["polling"],
+  path: "/socket.io"
 });
+
 
 // 连接成功
 socket.on("connect", () => {

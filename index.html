@@ -25,7 +25,9 @@ let currentRoom;
 
 function connect() {
   // ⚠️ 改成你的 Ubuntu IP
-  socket = io("http://100.88.34.8:3000");
+  socket = io("https://mininet-vm.taildb667f.ts.net", {
+    transports: ["websocket"]
+  });
 
   socket.on("roomUpdate", (players) => {
     document.getElementById("status").innerText =

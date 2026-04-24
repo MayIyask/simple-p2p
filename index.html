@@ -1,26 +1,30 @@
 <!DOCTYPE html>
 <html>
 <body>
+  <h2>发消息到虚拟机</h2>
 
-<input id="msg">
-<button onclick="send()">send</button>
+  <input id="msg" placeholder="输入消息">
+  <button onclick="send()">发送</button>
 
-<div id="log"></div>
+  <h3>VM显示：</h3>
+  <div id="out"></div>
 
 <script>
-const ws = new WebSocket("wss://mininet-vm.taildb667f.ts.net");
-
-ws.onopen = () => log("connected");
-
-ws.onmessage = (e) => log("recv: " + e.data);
+const server = "http://100.88.34.8:3000";
 
 function send() {
-  ws.send(document.getElementById("msg").value);
+  fetch(server + "/send", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({message: document.getElementById("msg").value})
+  });
 }
 
-function log(t) {
-  document.getElementById("log").innerHTML += "<div>" + t + "</div>";
-}
+setInterval(async () => {
+  const res = await fetch(server + "/get");
+  const data = await res.json();
+  document.getElementById("out").innerText = data.message;
+}, 1000);
 </script>
 
 </body>

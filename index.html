@@ -4,7 +4,9 @@
   <h2>房间聊天室</h2>
 
   <input id="room" placeholder="输入房间号">
-  <button onclick="join()">加入/创建房间</button>
+  <button onclick="join()">加入房间</button>
+
+  <p id="status"></p>
 
   <div id="chat" style="display:none;">
     <h3>当前房间：<span id="rname"></span></h3>
@@ -20,13 +22,36 @@ const server = "http://100.88.34.8:3000";
 
 let currentRoom = null;
 
-function join() {
-    currentRoom = document.getElementById("room").value;
-    document.getElementById("rname").innerText = currentRoom;
+// 👉 加入房间（关键修复点）
+async function join() {
+    const room = document.getElementById("room").value;
+
+    const res = await fetch(server + "/join", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ room })
+    });
+
+    const data = await res.json();
+
+    currentRoom = room;
+    document.getElementById("rname").innerText = room;
     document.getElementById("chat").style.display = "block";
+
+    if (data.created) {
+        document.getElementById("status").innerText = "🆕 房间已创建";
+    } else {
+        document.getElementById("status").innerText = "✅ 已加入房间";
+    }
 }
 
+// 👉 发送消息（只有 join 后才能发）
 function send() {
+    if (!currentRoom) {
+        alert("请先加入房间");
+        return;
+    }
+
     fetch(server + "/send", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -37,7 +62,7 @@ function send() {
     });
 }
 
-// 轮询刷新房间消息
+// 👉 刷新消息
 setInterval(async () => {
     if (!currentRoom) return;
 

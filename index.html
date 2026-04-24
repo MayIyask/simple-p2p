@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>石头剪刀布 · 无服务器 P2P</title>
+  <style>
+    body { font-family: system-ui, sans-serif; text-align: center; background: #1a1a2e; color: #e0e0e0; margin: 0; padding: 2rem; }
+    .card { background: #16213e; border-radius: 1rem; padding: 2rem; max-width: 500px; margin: 0 auto; box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
+    button { background: #0f3460; color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 0.5rem; font-size: 1rem; margin: 0.3rem; cursor: pointer; transition: 0.2s; }
+    button:hover { background: #e94560; transform: scale(1.05); }
+    button:disabled { background: #555; transform: none; cursor: not-allowed; }
+    .choice-btn { font-size: 2rem; padding: 0.5rem 1.2rem; margin: 0.75rem; }
+    .room-section { margin: 1.5rem 0; }
+    input { padding: 0.6rem; border-radius: 0.5rem; border: none; font-size: 1rem; }
+    .status { margin: 1rem 0; padding: 0.75rem; border-radius: 0.5rem; background: #0f3460; }
+    .result { font-size: 1.4rem; font-weight: bold; margin: 1rem 0; color: #e94560; }
+    .choice-display { font-size: 1.2rem; margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>✊ ✋ ✌️ 石头剪刀布</h1>
+    <p>无需服务器 · 纯 P2P 联机</p>
+
+    <!-- 连接区域 -->
+    <div id="connectArea" class="room-section">
+      <button id="hostBtn">🎮 创建房间</button>
+      <br><br>
+      <input type="text" id="roomInput" placeholder="输入房间号" />
+      <button id="joinBtn">🚪 加入房间</button>
+      <br><small>好友复制房间号发给你</small>
+    </div>
+
+    <!-- 房间信息 -->
+    <div id="roomInfo" style="display:none;">
+      <div class="status">房间号: <strong id="roomCodeDisplay"></strong> <br> <span id="peerStatus">等待对手加入...</span></div>
+      <button id="copyRoomBtn">📋 复制房间号</button>
+    </div>
+
+    <!-- 游戏区域 (初始隐藏) -->
+    <div id="gameArea" style="display:none;">
+      <p>选择你的手势：</p>
+      <div>
+        <button class="choice-btn" data-choice="rock">✊</button>
+        <button class="choice-btn" data-choice="paper">✋</button>
+        <button class="choice-btn" data-choice="scissors">✌️</button>
+      </div>
+      <div class="choice-display" id="myChoiceDisplay"></div>
+      <div class="choice-display" id="opponentChoiceDisplay"></div>
+      <div class="result" id="resultDisplay"></div>
+      <button id="playAgainBtn" style="display:none;">🔄 再来一局</button>
+    </div>
+  </div>
+
+  <!-- 引入 Trystero CDN -->
+  <script type="module">
+    import { joinRoom, selfId } from 'https://cdn.skypack.dev/trystero@0.20.0';
+
+    // --- 状态变量 ---
+    let room = null;
+    let sendPeer = null;           // 发送函数
+    let myChoice = null;
+    let opponentChoice = null;
+    let gameActive = false;       // 防止重复选择
+
+    // --- DOM 元素 ---
+    const connectArea = document.getElementById('connectArea');
+    const roomInfo = document.getElementById('roomInfo');
+    const gameArea = document.getElementById('gameArea');
+    const hostBtn = document.getElementById('hostBtn');
+    const joinBtn = document.getElementById('joinBtn');
+    const roomInput = document.getElementById('roomInput');
+    const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+    const peerStatus = document.getElementById('peerStatus');
+    const copyRoomBtn = document.getElementById('copyRoomBtn');
+    const myChoiceDisplay = document.getElementById('myChoiceDisplay');
+    const opponentChoiceDisplay = document.getElementById('opponentChoiceDisplay');
+    const resultDisplay = document.getElementById('resultDisplay');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    const choiceBtns = document.querySelectorAll('.choice-btn');
+
+    // --- 工具函数: 手势转 emoji ---
+    const choiceEmoji = { rock: '✊', paper: '✋', scissors: '✌️' };
+
+    // --- 判断胜负 ---
+    function getResult(a, b) {
+      if (a === b) return '平局 🤝';
+      if ((a === 'rock' && b === 'scissors') ||
+          (a === 'scissors' && b === 'paper') ||
+          (a === 'paper' && b === 'rock')) {
+        return '你赢了！ 🎉';
+      }
+      return '你输了 😢';
+    }
+
+    // --- 重置游戏状态，准备下一轮 ---
+    function resetGame() {
+      myChoice = null;
+      opponentChoice = null;
+      gameActive = true;
+      myChoiceDisplay.textContent = '';
+      opponentChoiceDisplay.textContent = '';
+      resultDisplay.textContent = '';
+      playAgainBtn.style.display = 'none';
+      choiceBtns.forEach(b => b.disabled = false);
+    }
+
+    // --- 处理收到的对手消息 ---
+    function handlePeerMessage(data, peerId) {
+      if (data.type === 'choice') {
+        opponentChoice = data.choice;
+        opponentChoiceDisplay.textContent = `对手出了: ${choiceEmoji[opponentChoice] || opponentChoice}`;
+        // 如果我还没出，禁用按钮，等待我选择
+        // 如果我已经选了，立即判定
+        if (myChoice) {
+          showResult();
+        } else {
+          // 可提示等待玩家选择
+          resultDisplay.textContent = '对手已选择，等待你...';
+        }
+      } else if (data.type === 'playAgain') {
+        // 对方想再玩一局
+        resetGame();
+      } else if (data.type === 'peerLeft') {
+        peerStatus.textContent = '对手断开了连接';
+        gameActive = false;
+        choiceBtns.forEach(b => b.disabled = true);
+      }
+    }
+
+    // --- 显示最终结果 ---
+    function showResult() {
+      if (!myChoice || !opponentChoice) return;
+      gameActive = false;
+      choiceBtns.forEach(b => b.disabled = true);
+      const res = getResult(myChoice, opponentChoice);
+      resultDisplay.textContent = res;
+      playAgainBtn.style.display = 'inline-block';
+    }
+
+    // --- 发送消息给对手 ---
+    function sendToPeer(data) {
+      if (sendPeer) {
+        sendPeer(data);
+      } else {
+        alert('尚未与对手建立连接');
+      }
+    }
+
+    // --- 玩家做出选择 ---
+    function makeChoice(choice) {
+      if (!gameActive) return;
+      if (myChoice) return; // 已经选过了
+
+      myChoice = choice;
+      myChoiceDisplay.textContent = `你出了: ${choiceEmoji[choice]}`;
+      choiceBtns.forEach(b => b.disabled = true);
+
+      // 发送选择给对手
+      sendToPeer({ type: 'choice', choice });
+
+      // 如果对手已经选了，直接判定
+      if (opponentChoice) {
+        showResult();
+      } else {
+        resultDisplay.textContent = '等待对手选择...';
+      }
+    }
+
+    // --- 加入房间的通用设置 ---
+    async function setupRoom(roomConfig, isHost) {
+      room = joinRoom(roomConfig, 'rps-game');
+      
+      // 当有新对等节点加入/连接时
+      room.onPeerJoin((peerId) => {
+        peerStatus.textContent = '对手已连接！';
+        // 获取发送函数
+        sendPeer = room.makeAction('game');
+        // 监听消息
+        room.onPeerLeave((leftPeerId) => {
+          handlePeerMessage({ type: 'peerLeft' }, leftPeerId);
+        });
+        // 启动游戏
+        gameArea.style.display = 'block';
+        resetGame();
+      });
+
+      // 通用的消息监听 (用 makeAction 返回的 send 会自动处理，但为了接收，我们用 onPeerJoin 后再监听?)
+      // Trystero: 我们需要在 onPeerJoin 里设置接收。
+      // 但 makeAction 返回的 send 是发送，接收需要 room.onPeerData 或者用 action 的 onMessage。
+      // 更简单的：使用 room.onPeerJoin 后，通过 room.makeAction('game') 得到 [send, receive]
+      // 修正：room.makeAction(namespace) 返回 [send, receive]
+      // 我们改成使用 action 的 receive
+    }
+
+    // --- 修改连接逻辑，使用 makeAction 的 receive ---
+    async function connectAndPlay(roomNamespace, isHost) {
+      room = joinRoom({ appId: 'rock-paper-scissors-nostr' }, roomNamespace);
+      
+      // 创建通信通道 (发送和接收)
+      const [send, receive] = room.makeAction('game');
+      sendPeer = send;
+
+      // 处理接收的消息
+      receive((data, peerId) => {
+        handlePeerMessage(data, peerId);
+      });
+
+      // 监听对等点加入
+      room.onPeerJoin((peerId) => {
+        peerStatus.textContent = '对手已连接！';
+        gameArea.style.display = 'block';
+        resetGame();
+      });
+
+      room.onPeerLeave((peerId) => {
+        handlePeerMessage({ type: 'peerLeft' }, peerId);
+      });
+
+      // 显示房间信息
+      roomCodeDisplay.textContent = roomNamespace;
+      connectArea.style.display = 'none';
+      roomInfo.style.display = 'block';
+    }
+
+    // --- 创建房间 (Host) ---
+    hostBtn.addEventListener('click', async () => {
+      // 生成一个简短的房间号
+      const roomCode = Math.random().toString(36).substring(2, 8);
+      await connectAndPlay(roomCode, true);
+    });
+
+    // --- 加入房间 ---
+    joinBtn.addEventListener('click', async () => {
+      const roomCode = roomInput.value.trim();
+      if (!roomCode) {
+        alert('请输入房间号');
+        return;
+      }
+      await connectAndPlay(roomCode, false);
+    });
+
+    // --- 复制房间号 ---
+    copyRoomBtn.addEventListener('click', () => {
+      const code = roomCodeDisplay.textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        alert('房间号已复制，发送给好友吧！');
+      });
+    });
+
+    // --- 手势按钮监听 ---
+    choiceBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const choice = btn.dataset.choice;
+        makeChoice(choice);
+      });
+    });
+
+    // --- 再来一局 ---
+    playAgainBtn.addEventListener('click', () => {
+      sendToPeer({ type: 'playAgain' });
+      resetGame();
+    });
+
+    // 初始隐藏游戏和房间信息
+    gameArea.style.display = 'none';
+    roomInfo.style.display = 'none';
+  </script>
+</body>
+</html>

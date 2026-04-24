@@ -58,7 +58,9 @@ input {
 // ======================
 // 🔥 连接后端（改这里IP）
 // ======================
-const socket = io("http://100.88.34.8:3000");
+const socket = io("http://100.88.34.8:3000", {
+  transports: ["websocket", "polling"]
+});
 
 let room = null;
 let myMove = null;

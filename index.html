@@ -1,179 +1,59 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>石头剪刀布 - 联机版</title>
-
-<style>
-body {
-  font-family: Arial;
-  text-align: center;
-  margin-top: 40px;
-}
-
-button {
-  margin: 5px;
-  padding: 10px 20px;
-  font-size: 16px;
-}
-
-input {
-  width: 200px;
-  padding: 6px;
-  font-size: 14px;
-}
-</style>
+  <meta charset="UTF-8">
+  <title>石头剪刀布联机</title>
 </head>
-
 <body>
 
-<h2>🎮 石头剪刀布（Socket.IO + 房间版）</h2>
+<h2>房间</h2>
+<input id="room" placeholder="输入房间ID">
+<button onclick="join()">加入/创建房间</button>
 
-<p>你的房间号：</p>
-<h3 id="myRoom">未创建</h3>
+<h2>出拳</h2>
+<button onclick="play('rock')">石头</button>
+<button onclick="play('paper')">布</button>
+<button onclick="play('scissors')">剪刀</button>
 
-<button onclick="createRoom()">创建房间</button>
+<h2>状态</h2>
+<div id="status"></div>
 
-<hr>
-
-<p>加入房间：</p>
-<input id="roomInput" placeholder="输入房间号">
-<button onclick="joinRoom()">加入房间</button>
-
-<h3 id="status">未连接</h3>
-<h4 id="people"></h4>
-
-<hr>
-
-<button onclick="play('rock')">✊ 石头</button>
-<button onclick="play('scissors')">✌ 剪刀</button>
-<button onclick="play('paper')">✋ 布</button>
-
-<h3 id="result"></h3>
-
-<!-- Socket.IO -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
 <script>
-// ======================
-// 🔥 连接后端（改这里IP）
-// ======================
-const socket = io("https://mininet-vm.taildb667f.ts.net", {
-  transports: ["websocket", "polling"]
-});
+let socket;
+let currentRoom;
 
-let room = null;
-let myMove = null;
-let opponentMove = null;
+function connect() {
+  // ⚠️ 改成你的 Ubuntu IP
+  socket = io("http://你的IP:3000");
 
-// ======================
-// 🔍 调试：连接状态
-// ======================
-socket.on("connect", () => {
-  console.log("✅ connected to server");
-  document.getElementById("status").innerText = "已连接服务器";
-});
-
-socket.on("connect_error", (err) => {
-  console.log("❌ connect error:", err);
-  document.getElementById("status").innerText = "连接失败";
-});
-
-// ======================
-// 🎮 创建房间
-// ======================
-function createRoom() {
-  room = Math.floor(Math.random() * 9000 + 1000).toString();
-
-  document.getElementById("myRoom").innerText = room;
-  document.getElementById("status").innerText = "等待对手加入...";
-
-  socket.emit("joinRoom", room);
-}
-
-// ======================
-// 🎮 加入房间
-// ======================
-function joinRoom() {
-  room = document.getElementById("roomInput").value;
-
-  if (!room) {
-    alert("请输入房间号");
-    return;
-  }
-
-  socket.emit("joinRoom", room);
-}
-
-// ======================
-// 📡 后端事件
-// ======================
-
-// 成功加入
-socket.on("joined", r => {
-  room = r;
-  document.getElementById("status").innerText = "已加入房间：" + r;
-});
-
-// 房间人数
-socket.on("roomUpdate", num => {
-  document.getElementById("people").innerText = "房间人数：" + num;
-});
-
-// 房间满
-socket.on("roomFull", () => {
-  alert("房间已满（最多2人）");
-});
-
-// 对手动作
-socket.on("opponentMove", move => {
-  opponentMove = move;
-  checkResult();
-});
-
-// ======================
-// 🎮 出拳
-// ======================
-function play(move) {
-  if (!room) {
-    alert("请先创建或加入房间");
-    return;
-  }
-
-  myMove = move;
-
-  socket.emit("move", {
-    room: room,
-    move: move
+  socket.on("roomUpdate", (players) => {
+    document.getElementById("status").innerText =
+      "房间人数: " + players.length;
   });
 
-  checkResult();
+  socket.on("result", (data) => {
+    document.getElementById("status").innerText =
+      `你: ${data.p1} 对手: ${data.p2} => ${data.result}`;
+  });
 }
 
-// ======================
-// 🧠 判定胜负
-// ======================
-function checkResult() {
-  if (!myMove || !opponentMove) return;
+function join() {
+  const room = document.getElementById("room").value;
+  currentRoom = room;
 
-  let result = "平局 🤝";
-
-  if (
-    (myMove === "rock" && opponentMove === "scissors") ||
-    (myMove === "scissors" && opponentMove === "paper") ||
-    (myMove === "paper" && opponentMove === "rock")
-  ) {
-    result = "你赢了 🎉";
-  } else if (myMove !== opponentMove) {
-    result = "你输了 😢";
-  }
-
-  document.getElementById("result").innerText =
-    `你: ${myMove} | 对手: ${opponentMove} → ${result}`;
-
-  myMove = null;
-  opponentMove = null;
+  socket.emit("joinRoom", room);
+  document.getElementById("status").innerText = "已加入房间 " + room;
 }
+
+function play(choice) {
+  socket.emit("play", {
+    roomId: currentRoom,
+    choice
+  });
+}
+
+connect();
 </script>
 
 </body>

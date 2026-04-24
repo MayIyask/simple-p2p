@@ -1,63 +1,39 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8">
-  <title>连接测试</title>
-</head>
+<head><meta charset="utf-8"></head>
 <body>
 
-<h3>Socket 连接测试</h3>
+<input id="room" placeholder="room">
+<button onclick="join()">join</button>
 
-<input id="room" placeholder="room id">
-<button onclick="join()">加入房间</button>
+<input id="msg">
+<button onclick="send()">send</button>
 
-<br><br>
-
-<input id="msg" placeholder="message">
-<button onclick="send()">发送</button>
-
-<h4>输出：</h4>
 <div id="log"></div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
 <script>
-let socket;
-
-// 1️⃣ 只做连接
-socket = io("https://mininet-vm.taildb667f.ts.net", {
+const socket = io("https://mininet-vm.taildb667f.ts.net", {
   transports: ["polling"],
   path: "/socket.io"
 });
 
-
-// 连接成功
 socket.on("connect", () => {
-  log("✔ connected: " + socket.id);
+  log("connected: " + socket.id);
 });
 
-// 收消息
-socket.on("msg", (data) => {
-  log("📩 " + data);
-});
+socket.on("msg", (m) => log("recv: " + m));
 
-// 加入房间
 function join() {
-  const room = document.getElementById("room").value;
-  socket.emit("joinRoom", room);
-  log("join room: " + room);
+  socket.emit("joinRoom", document.getElementById("room").value);
 }
 
-// 发消息
 function send() {
-  const msg = document.getElementById("msg").value;
-  socket.emit("msg", msg);
-  log("send: " + msg);
+  socket.emit("msg", document.getElementById("msg").value);
 }
 
-// 打印
-function log(text) {
-  document.getElementById("log").innerHTML += "<div>" + text + "</div>";
+function log(t) {
+  document.getElementById("log").innerHTML += "<div>" + t + "</div>";
 }
 </script>
 

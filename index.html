@@ -25,7 +25,7 @@ let currentRoom;
 
 function connect() {
   // ⚠️ 改成你的 Ubuntu IP
-  socket = io("http://你的IP:3000");
+  socket = io("http://100.88.34.8:3000");
 
   socket.on("roomUpdate", (players) => {
     document.getElementById("status").innerText =

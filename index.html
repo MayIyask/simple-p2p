@@ -2,61 +2,86 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>极简聊天室</title>
+    <title>多房间聊天系统</title>
     <style>
-        #chatBox { height: 300px; border: 1px solid #ccc; overflow-y: scroll; margin-bottom: 10px; padding: 10px; }
-        .msg-item { margin-bottom: 5px; border-bottom: 1px dashed #eee; }
-        .time { color: #888; font-size: 0.8em; }
+        .hidden { display: none; }
+        #chatBox { height: 400px; border: 1px solid #ddd; overflow-y: auto; padding: 10px; background: #f9f9f9; }
+        .msg { margin-bottom: 8px; }
+        .u { font-weight: bold; color: #2c3e50; }
+        .t { font-size: 0.75em; color: #999; margin-left: 5px; }
     </style>
 </head>
 <body>
-    <h2>公共聊天室</h2>
-    <div id="chatBox">正在加载消息...</div>
-    
-    <input type="text" id="msgInput" placeholder="输入消息">
-    <button onclick="sendMessage()">发送</button>
+    <div id="loginLayer">
+        <h2>进入聊天室</h2>
+        <input type="text" id="username" placeholder="设置你的昵称">
+        <hr>
+        <button onclick="createNewRoom()">创建新房间</button>
+        <p>或输入房号加入：</p>
+        <input type="text" id="roomInput" placeholder="四位房间号">
+        <button onclick="joinRoom()">加入房间</button>
+    </div>
+
+    <div id="chatLayer" class="hidden">
+        <h3>房间号: <span id="currentRoom"></span> | 用户: <span id="currentUser"></span> 
+            <button onclick="location.reload()">退出</button></h3>
+        <div id="chatBox"></div>
+        <input type="text" id="msgInput" style="width: 70%" placeholder="聊点什么...">
+        <button onclick="sendMessage()">发送</button>
+    </div>
 
     <script>
-        const baseUrl = 'https://mininet-vm.taildb667f.ts.net';
+        const baseUrl = 'https://你的域名.ts.net'; // 记得替换
+        let myName = '';
+        let myRoom = '';
 
-        // 发送消息
-        async function sendMessage() {
-            const input = document.getElementById('msgInput');
-            if(!input.value) return;
+        async function createNewRoom() {
+            const res = await fetch(`${baseUrl}/create_room`, {method: 'POST'});
+            const data = await res.json();
+            enterChat(data.room);
+        }
+
+        function joinRoom() {
+            const room = document.getElementById('roomInput').value;
+            if (room.length !== 4) return alert("请输入4位房间号");
+            enterChat(room);
+        }
+
+        function enterChat(room) {
+            myName = document.getElementById('username').value || "无名氏";
+            myRoom = room;
+            document.getElementById('loginLayer').className = 'hidden';
+            document.getElementById('chatLayer').className = '';
+            document.getElementById('currentRoom').innerText = myRoom;
+            document.getElementById('currentUser').innerText = myName;
             
+            setInterval(loadMessages, 2000); // 开启轮询
+        }
+
+        async function sendMessage() {
+            const msg = document.getElementById('msgInput').value;
+            if(!msg) return;
             await fetch(`${baseUrl}/send`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({msg: input.value})
+                body: JSON.stringify({ room: myRoom, user: myName, msg: msg })
             });
-            input.value = ''; // 清空输入框
-            loadMessages();   // 立即刷新一次
+            document.getElementById('msgInput').value = '';
         }
 
-        // 加载消息
         async function loadMessages() {
             try {
-                const response = await fetch(`${baseUrl}/get`);
-                const msgs = await response.json();
-                const chatBox = document.getElementById('chatBox');
-                
-                chatBox.innerHTML = msgs.map(m => `
-                    <div class="msg-item">
-                        <span class="time">[${m.time}]</span> ${m.content}
+                const res = await fetch(`${baseUrl}/get_messages?room=${myRoom}`);
+                if (!res.ok) return;
+                const msgs = await res.json();
+                document.getElementById('chatBox').innerHTML = msgs.map(m => `
+                    <div class="msg">
+                        <span class="u">${m.user}</span><span class="t">${m.time}</span><br>
+                        <div>${m.content}</div>
                     </div>
                 `).join('');
-                
-                // 滚动到底部
-                chatBox.scrollTop = chatBox.scrollHeight;
-            } catch (e) {
-                console.error("更新失败", e);
-            }
+            } catch (e) {}
         }
-
-        // 每 3 秒自动刷新一次
-        setInterval(loadMessages, 3000);
-        // 页面加载时执行一次
-        loadMessages();
     </script>
 </body>
 </html>

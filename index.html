@@ -8,19 +8,25 @@
     <script>
         async function sendMessage() {
             const msg = document.getElementById('msgInput').value;
-            // 注意：这里需要替换成你虚拟机的公网 IP
-            const serverIp = 'http://你的虚拟机公网IP:5000/send';
-
+            
+            // 关键点：使用 Tailscale 提供的 HTTPS 域名，后面加上你在 Flask 定义的路由 /send
+            const serverUrl = 'https://mininet-vm.taildb667f.ts.net/send';
+        
             try {
-                const response = await fetch(serverIp, {
+                const response = await fetch(serverUrl, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({msg: msg})
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ msg: msg })
                 });
+                
                 const resData = await response.json();
-                alert('服务器返回: ' + resData.status);
+                console.log('成功:', resData);
+                alert('发送成功！服务器收到：' + resData.received);
             } catch (error) {
                 console.error('发送失败:', error);
+                alert('发送失败，请检查控制台 Error');
             }
         }
     </script>

@@ -1,101 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
-  <meta charset="utf-8">
-  <title>RPS P2P</title>
+<meta charset="UTF-8">
+<title>P2P 石头剪刀布</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+body { font-family: Arial; text-align: center; }
+button { margin: 5px; padding: 10px 20px; }
+</style>
 </head>
 <body>
-<h2>石头剪刀布 P2P</h2>
 
-<button onclick="create()">创建房间</button>
-<button onclick="join()">加入房间</button>
+<h2>🎮 P2P 石头剪刀布</h2>
 
-<p>本地信息：</p>
-<textarea id="local" rows="6" cols="60"></textarea>
+<p>你的ID：</p>
+<input id="myid" readonly style="width:300px">
 
-<p>远程信息：</p>
-<textarea id="remote" rows="6" cols="60"></textarea>
-<button onclick="connect()">连接</button>
+<p>连接对方：</p>
+<input id="target" placeholder="输入对方ID">
+<button onclick="connectPeer()">连接</button>
+
+<h3 id="status">未连接</h3>
 
 <hr>
 
-<button onclick="sendMove('rock')">石头</button>
-<button onclick="sendMove('scissors')">剪刀</button>
-<button onclick="sendMove('paper')">布</button>
+<button onclick="play('rock')">石头</button>
+<button onclick="play('scissors')">剪刀</button>
+<button onclick="play('paper')">布</button>
 
-<h3 id="status"></h3>
+<h3 id="result"></h3>
 
 <script>
-let pc = new RTCPeerConnection({
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+let peer = new Peer();
+let conn;
+let myMove = null;
+let opponentMove = null;
+
+// 获取自己的ID
+peer.on('open', id => {
+  document.getElementById('myid').value = id;
 });
-let channel;
 
-function create() {
-  channel = pc.createDataChannel("game");
-  setupChannel();
+// 接收连接
+peer.on('connection', connection => {
+  conn = connection;
+  setupConn();
+});
 
-  pc.onicecandidate = e => {
-    if (!e.candidate) {
-      local.value = JSON.stringify(pc.localDescription);
-    }
-  };
-
-  pc.createOffer()
-    .then(o => pc.setLocalDescription(o));
+// 主动连接
+function connectPeer() {
+  let target = document.getElementById('target').value;
+  conn = peer.connect(target);
+  setupConn();
 }
 
-function join() {
-  pc.ondatachannel = e => {
-    channel = e.channel;
-    setupChannel();
-  };
+// 设置连接事件
+function setupConn() {
+  conn.on('open', () => {
+    document.getElementById('status').innerText = "已连接 ✅";
+  });
 
-  pc.onicecandidate = e => {
-    if (!e.candidate) {
-      local.value = JSON.stringify(pc.localDescription);
-    }
-  };
-}
-
-function connect() {
-  let data = JSON.parse(remote.value);
-
-  pc.setRemoteDescription(data).then(() => {
-    if (data.type === "offer") {
-      pc.createAnswer().then(a => pc.setLocalDescription(a));
+  conn.on('data', data => {
+    if (data.type === "move") {
+      opponentMove = data.value;
+      checkResult();
     }
   });
 }
 
-function setupChannel() {
-  channel.onmessage = e => {
-    let opponent = e.data;
-    let me = window.myMove;
+// 出拳
+function play(move) {
+  if (!conn || conn.open !== true) {
+    alert("还没连接！");
+    return;
+  }
 
-    if (me) {
-      showResult(me, opponent);
-    }
-  };
+  myMove = move;
+  conn.send({ type: "move", value: move });
+
+  checkResult();
 }
 
-function sendMove(move) {
-  window.myMove = move;
-  channel.send(move);
-}
+// 判断胜负
+function checkResult() {
+  if (!myMove || !opponentMove) return;
 
-function showResult(a, b) {
-  let result = "平局";
+  let res = "平局";
   if (
-    (a==="rock" && b==="scissors") ||
-    (a==="scissors" && b==="paper") ||
-    (a==="paper" && b==="rock")
-  ) result = "你赢了";
+    (myMove === "rock" && opponentMove === "scissors") ||
+    (myMove === "scissors" && opponentMove === "paper") ||
+    (myMove === "paper" && opponentMove === "rock")
+  ) res = "你赢了 🎉";
 
-  if (a !== b && result !== "你赢了") result = "你输了";
+  if (myMove !== opponentMove && res !== "你赢了 🎉") {
+    res = "你输了 😢";
+  }
 
-  status.innerText = `你:${a} 对手:${b} → ${result}`;
+  document.getElementById('result').innerText =
+    `你:${myMove} | 对手:${opponentMove} → ${res}`;
+
+  // 重置
+  myMove = null;
+  opponentMove = null;
 }
 </script>
+
 </body>
 </html>

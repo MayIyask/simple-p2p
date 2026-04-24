@@ -11,10 +11,17 @@ input { width: 200px; padding: 5px; }
 </head>
 <body>
 
-<h2>🎮 石头剪刀布（Socket.IO 房间版）</h2>
+<h2>🎮 石头剪刀布（房间系统）</h2>
 
-<p>输入房间号：</p>
-<input id="roomInput" placeholder="例如 1234">
+<p>你的房间号：</p>
+<h3 id="myRoom">未创建</h3>
+
+<button onclick="createRoom()">创建房间</button>
+
+<hr>
+
+<p>加入房间：</p>
+<input id="roomInput" placeholder="输入房间号">
 <button onclick="joinRoom()">加入房间</button>
 
 <h3 id="status">未连接</h3>
@@ -28,27 +35,38 @@ input { width: 200px; padding: 5px; }
 
 <h3 id="result"></h3>
 
-<!-- Socket.IO -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-// 👉 改成你的 Tailscale IP
 const socket = io("http://100.88.34.8:3000");
 
-let roomJoined = false;
+let room = null;
 let myMove = null;
 let opponentMove = null;
 
+// 创建房间
+function createRoom() {
+  room = Math.floor(Math.random() * 9000 + 1000).toString();
+
+  document.getElementById("myRoom").innerText = room;
+  document.getElementById("status").innerText = "房间已创建，等待玩家加入...";
+
+  socket.emit("joinRoom", room);
+}
+
 // 加入房间
 function joinRoom() {
-  const room = document.getElementById("roomInput").value;
+  room = document.getElementById("roomInput").value;
+
+  if (!room) return alert("请输入房间号");
+
   socket.emit("joinRoom", room);
 }
 
 // 成功加入
-socket.on("joined", room => {
-  roomJoined = true;
-  document.getElementById("status").innerText = "已加入房间：" + room;
+socket.on("joined", r => {
+  room = r;
+  document.getElementById("status").innerText = "已加入房间：" + r;
 });
 
 // 房间人数
@@ -69,14 +87,15 @@ socket.on("opponentMove", move => {
 
 // 出拳
 function play(move) {
-  if (!roomJoined) {
-    alert("请先加入房间！");
+  if (!room) {
+    alert("请先创建或加入房间！");
     return;
   }
 
   myMove = move;
+
   socket.emit("move", {
-    room: document.getElementById("roomInput").value,
+    room: room,
     move: move
   });
 

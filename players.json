@@ -1,4 +1,20 @@
 [
-  {"name": "ZywOo", "team": "Vitality", "cont": "Europe", "country": "France", "age": 23, "role": "AWPer", "majors": 6},
-  {"name": "m0NESY", "team": "G2", "cont": "Europe", "country": "Russia", "age": 18, "role": "AWPer", "majors": 4}
+    {
+        "name": "s1mple",
+        "team": "NAVI",
+        "cont": "Europe",
+        "country": "Ukraine",
+        "age": 26,
+        "role": "AWPer",
+        "majors": 12
+    },
+    {
+        "name": "NiKo",
+        "team": "G2",
+        "cont": "Europe",
+        "country": "Bosnia",
+        "age": 27,
+        "role": "Rifler",
+        "majors": 11
+    }
 ]

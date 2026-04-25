@@ -19,7 +19,6 @@ jobs:
           python-version: '3.9'
 
       - name: 安装依赖包
-        run: pip install requests # 如果你的脚本用了 BeautifulSoup，这里也要加
         run: pip install requests beautifulsoup4
         
       - name: 运行爬虫脚本

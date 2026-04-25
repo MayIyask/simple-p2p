@@ -2,120 +2,173 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CS2 Pro Guess</title>
+    <title>自建五子棋对战</title>
     <style>
-        body { background: #0b0e11; color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; background: #e0e0e0; }
         .hidden { display: none; }
-        #game { width: 90%; max-width: 800px; text-align: center; }
-        /* 搜索框建议 */
-        .search-container { position: relative; width: 300px; margin: 20px auto; }
-        #searchBox { width: 100%; padding: 12px; border-radius: 8px; border: none; }
-        #suggestions { position: absolute; width: 100%; background: #1b2838; border: 1px solid #66c0f4; border-radius: 0 0 8px 8px; z-index: 100; }
-        .suggest-item { padding: 10px; cursor: pointer; text-align: left; }
-        .suggest-item:hover { background: #66c0f4; }
-        /* 结果网格 */
-        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 10px; }
-        .header { font-weight: bold; padding: 10px; border-bottom: 2px solid #444; }
-        .cell { height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 0.9em; text-align: center; font-weight: bold;}
-        .green { background: #4caf50; }
-        .yellow { background: #ffd700; color: black; }
-        .red { background: #f44336; }
+        #board { 
+            display: grid; grid-template-columns: repeat(15, 30px); grid-template-rows: repeat(15, 30px); 
+            gap: 1px; background: #c5a059; padding: 10px; border: 4px solid #5d3a1a; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2); margin: 20px 0;
+        }
+        .cell { 
+            width: 30px; height: 30px; background: #dcb35c; border: 1px solid rgba(0,0,0,0.05);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .piece { width: 26px; height: 26px; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
+        .black { background: radial-gradient(circle at 30% 30%, #333, #000); }
+        .white { background: radial-gradient(circle at 30% 30%, #fff, #ccc); }
+        #status { font-size: 1.2em; margin: 10px; height: 1.5em; color: #2c3e50; }
+        input, button { padding: 8px; margin: 5px; border-radius: 4px; border: 1px solid #ccc; }
+        button { background: #27ae60; color: white; cursor: pointer; border: none; }
+        button:hover { background: #2ecc71; }
     </style>
 </head>
 <body>
     <div id="loginLayer">
-        <h1>CS2 职业选手猜猜乐</h1>
-        <input type="text" id="username" placeholder="昵称">
-        <button onclick="createRoom()">创建房间</button>
-        <input type="text" id="roomInput" placeholder="房号">
-        <button onclick="joinRoom()">加入房间</button>
+        <h1>🎮 五子棋联机版</h1>
+        <input type="text" id="username" placeholder="输入昵称">
+        <hr>
+        <button onclick="createRoom()">创建新房间</button>
+        <div>或</div>
+        <input type="text" id="roomInput" placeholder="4位房号" style="width:80px">
+        <button onclick="joinRoom()" style="background:#2980b9">加入房间</button>
     </div>
 
-    <div id="game" class="hidden">
-        <h2>房间: <span id="curRoom"></span> | 剩余机会: <span id="chance">10</span></h2>
-        <div class="search-container">
-            <input type="text" id="searchBox" placeholder="输入选手 ID..." oninput="handleSearch(this.value)">
-            <div id="suggestions"></div>
+    <div id="gameLayer" class="hidden">
+        <div style="background: white; padding: 10px; border-radius: 8px; width: 450px; text-align: center;">
+            <strong>房号:</strong> <span id="curRoom"></span> | 
+            <strong>你是:</strong> <span id="curUser"></span>
+            <div id="status">连接中...</div>
         </div>
-        <div class="grid header">
-            <div>名字</div><div>队伍</div><div>国籍</div><div>年龄</div><div>身份</div><div>MajApp</div>
-        </div>
-        <div id="history"></div>
+        <div id="board"></div>
+        <button onclick="location.reload()" style="background:#c0392b">退出并销毁</button>
     </div>
 
     <script>
-        const baseUrl = 'https://mininet-vm.taildb667f.ts.net';
-        let myRoom, allNames = [], chances = 10;
+        const baseUrl = 'https://mininet-vm.taildb667f.ts.net'; 
+        let myName, myRoom, myRole, lastMoveCount = 0;
 
+        // 1. 房间逻辑
         async function createRoom() {
-            const res = await fetch(`${baseUrl}/create_room`, {method:'POST'});
+            const name = document.getElementById('username').value || "房主";
+            const res = await fetch(`${baseUrl}/create_room`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({user: name})
+            });
             const data = await res.json();
-            setupGame(data.room);
+            initGame(data.room, 0, name);
         }
 
         async function joinRoom() {
-            const r = document.getElementById('roomInput').value;
-            if(r) setupGame(r);
+            const rid = document.getElementById('roomInput').value;
+            const name = document.getElementById('username').value || "访客";
+            if(rid.length !== 4) return alert("房号是4位数字");
+            
+            try {
+                const res = await fetch(`${baseUrl}/join_room`, {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({room: rid, user: name})
+                });
+                const data = await res.json();
+                if(res.ok) initGame(rid, data.role, name);
+                else alert(data.msg);
+            } catch(e) { alert("服务器连接失败，请检查隧道"); }
         }
 
-        async function setupGame(r) {
-            myRoom = r;
-            document.getElementById('loginLayer').className = 'hidden';
-            document.getElementById('game').className = '';
-            document.getElementById('curRoom').innerText = r;
-            // 预加载所有名字用于搜索建议
-            const res = await fetch(`${baseUrl}/get_players`);
-            allNames = await res.json();
+        function initGame(rid, role, name) {
+            myName = name; myRoom = rid; myRole = role;
+            document.getElementById('loginLayer').classList.add('hidden');
+            document.getElementById('gameLayer').classList.remove('hidden');
+            document.getElementById('curRoom').innerText = rid;
+            document.getElementById('curUser').innerText = name + (role==0?" (黑棋)":" (白棋)");
+            
+            // 绘制棋盘
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for(let i=0; i<225; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.onclick = () => handleMove(Math.floor(i/15), i%15);
+                cell.id = `cell-${Math.floor(i/15)}-${i%15}`;
+                board.appendChild(cell);
+            }
+            // 每 1.2 秒同步一次 (针对隧道优化的频率)
+            setInterval(syncStatus, 1200);
         }
 
-        function handleSearch(val) {
-            const sugg = document.getElementById('suggestions');
-            sugg.innerHTML = '';
-            if(!val) return;
-            const matches = allNames.filter(n => n.toLowerCase().includes(val.toLowerCase())).slice(0, 5);
-            matches.forEach(m => {
-                const d = document.createElement('div');
-                d.className = 'suggest-item';
-                d.innerText = m;
-                d.onclick = () => { submitGuess(m); sugg.innerHTML = ''; };
-                sugg.appendChild(d);
-            });
-        }
-
-        async function submitGuess(name) {
-            if(chances <= 0) return alert("机会用完啦！");
-            const res = await fetch(`${baseUrl}/guess`, {
+        // 2. 交互逻辑
+        async function handleMove(r, c) {
+            // 本地简单预判：不是自己的回合点击无效
+            const res = await fetch(`${baseUrl}/move`, {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({room: myRoom, guess: name})
+                body: JSON.stringify({room: myRoom, user: myName, pos: {r, c}})
             });
-            const data = await res.json();
-            if(!res.ok) return alert(data.msg);
-
-            renderRow(data);
-            chances--;
-            document.getElementById('chance').innerText = chances;
-            document.getElementById('searchBox').value = '';
-
-            if(data.name.clr === 'green') {
-                alert("🎯 天才般的猜测！你赢了！");
-                location.reload();
-            } else if(chances === 0) {
-                alert("机会耗尽，遗憾离场。");
-                location.reload();
+            if(!res.ok) {
+                const d = await res.json();
+                console.log("落子失败:", d.msg);
+            } else {
+                syncStatus(); // 成功后立即同步
             }
         }
 
-        function renderRow(data) {
-            const container = document.getElementById('history');
-            const row = document.createElement('div');
-            row.className = 'grid';
-            ['name', 'team', 'cont', 'age', 'role', 'majors'].forEach(k => {
-                const c = document.createElement('div');
-                c.className = `cell ${data[k].clr}`;
-                c.innerText = data[k].val;
-                row.appendChild(c);
+        async function syncStatus() {
+            try {
+                const res = await fetch(`${baseUrl}/get_status?room=${myRoom}`);
+                if(!res.ok) return;
+                const data = await res.json();
+                
+                // 状态显示
+                const statusEl = document.getElementById('status');
+                if(data.players.length < 2) {
+                    statusEl.innerText = "⏳ 等待对手加入...";
+                } else {
+                    const isMyTurn = (data.turn % 2 === myRole);
+                    statusEl.innerText = isMyTurn ? "🟢 轮到你了！" : "⚪ 对方思考中...";
+                    statusEl.style.color = isMyTurn ? "#27ae60" : "#7f8c8d";
+                }
+
+                // 有新棋子时才重绘
+                if(data.moves.length !== lastMoveCount) {
+                    drawMoves(data.moves);
+                    lastMoveCount = data.moves.length;
+                    checkWinLocal(data.moves);
+                }
+            } catch(e) {}
+        }
+
+        function drawMoves(moves) {
+            moves.forEach(m => {
+                const cell = document.getElementById(`cell-${m.r}-${m.c}`);
+                if(!cell.hasChildNodes()) {
+                    const p = document.createElement('div');
+                    p.className = `piece ${m.color}`;
+                    cell.appendChild(p);
+                }
             });
-            container.prepend(row);
+        }
+
+        // 3. 胜负算法 (在本地运行以保证无延迟响应)
+        function checkWinLocal(moves) {
+            if(moves.length === 0) return;
+            const last = moves[moves.length-1];
+            const directions = [[1,0], [0,1], [1,1], [1,-1]];
+            for(let [dr, dc] of directions) {
+                let count = 1;
+                const check = (dir) => {
+                    for(let i=1; i<5; i++) {
+                        const found = moves.find(m => m.r==last.r+dr*i*dir && m.c==last.c+dc*i*dir && m.color==last.color);
+                        if(found) count++; else break;
+                    }
+                };
+                check(1); check(-1);
+                if(count >= 5) {
+                    setTimeout(() => {
+                        alert(`游戏结束！${last.color === 'black' ? '黑棋' : '白棋'}获胜！`);
+                        location.reload();
+                    }, 100);
+                }
+            }
         }
     </script>
 </body>

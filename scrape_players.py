@@ -3,56 +3,60 @@ from bs4 import BeautifulSoup
 import json
 import time
 
-def scrape_liquipedia():
+def scrape():
+    # 模拟真实浏览器请求，防止 403 封锁
     url = "https://liquipedia.net/counterstrike/Portal:Rating"
-    # 必须设置 User-Agent，否则会被 403 拒绝
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
 
     try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        print("开始抓取 Liquipedia 排名...")
+        res = requests.get(url, headers=headers, timeout=15)
+        res.raise_for_status()
+        soup = BeautifulSoup(res.text, 'html.parser')
         
         players = []
-        # 定位排名表格中的行
-        # 注意：Liquipedia 的 HTML 结构经常变动，这里使用通用的 ID 提取逻辑
-        rows = soup.select('table.wikitable tr')[1:51] # 取前50行
-
-        for row in rows:
+        # 定位表格中的选手行 (Liquipedia 排名页通常使用 wikitable 样式)
+        rows = soup.select('table.wikitable tr')
+        
+        # 只取前 50 名有效数据 (跳过表头)
+        for row in rows[1:51]:
             cols = row.find_all('td')
             if len(cols) < 3: continue
             
-            # 提取 ID
-            name_link = cols[2].find('a')
-            if not name_link: continue
-            player_id = name_link.text.strip()
+            # 尝试提取 ID
+            p_id = cols[2].text.strip()
+            # 尝试提取队伍
+            team = cols[3].text.strip() if len(cols) > 3 else "Unknown"
             
-            # 提取队伍
-            team_link = cols[3].find('a')
-            team_name = team_link.get('title') if team_link else "Free Agent"
-            
-            # 补全基础逻辑 (由于 Age 等信息在个人页，为了不触发高频封锁，我们先随机/固定补全)
-            # 实际开发中，如果需要精确数据，需要再请求一次 player_id 的个人页面
+            # 这里的 Age, Country, Role 等信息在主表不一定全
+            # 我们先填充基础数据，保证游戏能跑通
             players.append({
-                "name": player_id,
-                "team": team_name,
-                "cont": "Europe", # 默认值，可在后续根据国家列表映射
-                "country": "Unknown",
-                "age": 22, # 默认值
-                "role": "Rifler", # 默认值
-                "majors": 5 # 默认值
+                "name": p_id,
+                "team": team,
+                "cont": "Europe", # 默认填充，后续可根据国家映射
+                "country": "TBD",
+                "age": 22,
+                "role": "Rifler",
+                "majors": 5
             })
-
-        # 写入文件
+            
+        # 加上时间戳记录更新
+        final_data = {
+            "update_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "players": players
+        }
+        
+        # 为了配合你之前的游戏逻辑，我们还是存为纯列表格式
+        # 如果你后端改了，这里也可以调整
         with open('players.json', 'w', encoding='utf-8') as f:
             json.dump(players, f, ensure_ascii=False, indent=4)
-        print(f"成功抓取了 {len(players)} 名选手！")
+            
+        print(f"抓取完成！共获得 {len(players)} 名选手。")
 
     except Exception as e:
-        print(f"抓取失败: {e}")
+        print(f"发生错误: {e}")
 
 if __name__ == "__main__":
-    scrape_liquipedia()
+    scrape()

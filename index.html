@@ -2,113 +2,120 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CS2 Pro Player Guess</title>
+    <title>CS2 Pro Guess</title>
     <style>
-        body { font-family: 'Arial', sans-serif; background: #1b2838; color: white; display: flex; flex-direction: column; align-items: center; }
-        .grid { display: grid; grid-template-columns: repeat(6, 100px); gap: 5px; margin-top: 20px; }
-        .cell { padding: 10px; text-align: center; border-radius: 4px; font-size: 0.8em; font-weight: bold; overflow: hidden;}
+        body { background: #0b0e11; color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; }
+        .hidden { display: none; }
+        #game { width: 90%; max-width: 800px; text-align: center; }
+        /* 搜索框建议 */
+        .search-container { position: relative; width: 300px; margin: 20px auto; }
+        #searchBox { width: 100%; padding: 12px; border-radius: 8px; border: none; }
+        #suggestions { position: absolute; width: 100%; background: #1b2838; border: 1px solid #66c0f4; border-radius: 0 0 8px 8px; z-index: 100; }
+        .suggest-item { padding: 10px; cursor: pointer; text-align: left; }
+        .suggest-item:hover { background: #66c0f4; }
+        /* 结果网格 */
+        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 10px; }
+        .header { font-weight: bold; padding: 10px; border-bottom: 2px solid #444; }
+        .cell { height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 0.9em; text-align: center; font-weight: bold;}
         .green { background: #4caf50; }
-        .yellow { background: #ffeb3b; color: black; }
+        .yellow { background: #ffd700; color: black; }
         .red { background: #f44336; }
-        .suggestion { background: #2a475e; border: 1px solid #66c0f4; position: absolute; width: 200px; z-index: 10; }
-        .suggestion div { padding: 8px; cursor: pointer; }
-        .suggestion div:hover { background: #66c0f4; }
-        input { padding: 10px; width: 200px; border: none; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <h1>CS2 选手猜猜乐</h1>
-    <div id="login">
-        <input type="text" id="uname" placeholder="你的名字">
-        <button onclick="createRoom()">新建房间</button>
-        <input type="text" id="rid" placeholder="房号" style="width:60px">
-        <button onclick="joinRoom()">加入</button>
+    <div id="loginLayer">
+        <h1>CS2 职业选手猜猜乐</h1>
+        <input type="text" id="username" placeholder="昵称">
+        <button onclick="createRoom()">创建房间</button>
+        <input type="text" id="roomInput" placeholder="房号">
+        <button onclick="joinRoom()">加入房间</button>
     </div>
 
-    <div id="game" class="hidden" style="display:none">
-        <h3>房间: <span id="roomNum"></span></h3>
-        <div style="position: relative;">
-            <input type="text" id="search" placeholder="输入选手名..." oninput="showSuggestions(this.value)">
-            <div id="suggestions" class="suggestion"></div>
+    <div id="game" class="hidden">
+        <h2>房间: <span id="curRoom"></span> | 剩余机会: <span id="chance">10</span></h2>
+        <div class="search-container">
+            <input type="text" id="searchBox" placeholder="输入选手 ID..." oninput="handleSearch(this.value)">
+            <div id="suggestions"></div>
         </div>
-        <div class="grid" id="historyHeader">
-            <div class="cell">名字</div><div class="cell">队伍</div><div class="cell">国籍</div>
-            <div class="cell">年龄</div><div class="cell">身份</div><div class="cell">Majors</div>
+        <div class="grid header">
+            <div>名字</div><div>队伍</div><div>国籍</div><div>年龄</div><div>身份</div><div>Major</div>
         </div>
         <div id="history"></div>
     </div>
 
     <script>
         const baseUrl = 'https://mininet-vm.taildb667f.ts.net';
-        let myName, myRoom, allPlayerNames = [];
+        let myRoom, allNames = [], chances = 10;
 
         async function createRoom() {
             const res = await fetch(`${baseUrl}/create_room`, {method:'POST'});
             const data = await res.json();
-            enterGame(data.room);
+            setupGame(data.room);
         }
 
         async function joinRoom() {
-            const r = document.getElementById('rid').value;
-            myName = document.getElementById('uname').value || "玩家";
-            await fetch(`${baseUrl}/join_room`, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({room: r, user: myName})
-            });
-            enterGame(r);
+            const r = document.getElementById('roomInput').value;
+            if(r) setupGame(r);
         }
 
-        async function enterGame(r) {
+        async function setupGame(r) {
             myRoom = r;
-            myName = document.getElementById('uname').value || "玩家";
-            document.getElementById('login').style.display = 'none';
-            document.getElementById('game').style.display = 'block';
-            document.getElementById('roomNum').innerText = r;
-            
-            // 获取全名列表用于搜索建议
+            document.getElementById('loginLayer').className = 'hidden';
+            document.getElementById('game').className = '';
+            document.getElementById('curRoom').innerText = r;
+            // 预加载所有名字用于搜索建议
             const res = await fetch(`${baseUrl}/get_players`);
-            allPlayerNames = await res.json();
+            allNames = await res.json();
         }
 
-        function showSuggestions(val) {
-            const div = document.getElementById('suggestions');
-            div.innerHTML = '';
+        function handleSearch(val) {
+            const sugg = document.getElementById('suggestions');
+            sugg.innerHTML = '';
             if(!val) return;
-            const matches = allPlayerNames.filter(n => n.toLowerCase().startsWith(val.toLowerCase())).slice(0, 5);
+            const matches = allNames.filter(n => n.toLowerCase().includes(val.toLowerCase())).slice(0, 5);
             matches.forEach(m => {
-                const item = document.createElement('div');
-                item.innerText = m;
-                item.onclick = () => { document.getElementById('search').value = m; div.innerHTML = ''; submitGuess(m); };
-                div.appendChild(item);
+                const d = document.createElement('div');
+                d.className = 'suggest-item';
+                d.innerText = m;
+                d.onclick = () => { submitGuess(m); sugg.innerHTML = ''; };
+                sugg.appendChild(d);
             });
         }
 
         async function submitGuess(name) {
+            if(chances <= 0) return alert("机会用完啦！");
             const res = await fetch(`${baseUrl}/guess`, {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({room: myRoom, user: myName, guess: name})
+                body: JSON.stringify({room: myRoom, guess: name})
             });
             const data = await res.json();
             if(!res.ok) return alert(data.msg);
-            addHistoryRow(data);
-            document.getElementById('search').value = '';
+
+            renderRow(data);
+            chances--;
+            document.getElementById('chance').innerText = chances;
+            document.getElementById('searchBox').value = '';
+
+            if(data.name.clr === 'green') {
+                alert("🎯 天才般的猜测！你赢了！");
+                location.reload();
+            } else if(chances === 0) {
+                alert("机会耗尽，遗憾离场。");
+                location.reload();
+            }
         }
 
-        function addHistoryRow(data) {
-            const h = document.getElementById('history');
+        function renderRow(data) {
+            const container = document.getElementById('history');
             const row = document.createElement('div');
             row.className = 'grid';
-            const cols = ['name', 'team', 'cont', 'age', 'role', 'majors'];
-            const rawMap = { 'cont': 'country', 'role': 'role', 'age': 'age', 'majors': 'majors', 'team': 'team', 'name': 'name'};
-            
-            cols.forEach(col => {
+            ['name', 'team', 'cont', 'age', 'role', 'majors'].forEach(k => {
                 const c = document.createElement('div');
-                c.className = `cell ${data.check[col]}`;
-                c.innerText = data.raw[rawMap[col] || col];
+                c.className = `cell ${data[k].clr}`;
+                c.innerText = data[k].val;
                 row.appendChild(c);
             });
-            h.prepend(row);
-            if(data.check.name === 'green') alert("🎉 猜对了！你是真正的 CSGO 大师！");
+            container.prepend(row);
         }
     </script>
 </body>
